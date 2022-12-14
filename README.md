@@ -1,60 +1,66 @@
-We gaan op alle topics subscriben!
+We gaan spelen met lampjes!
+
+Bovenaan de file, voeg deze magische import toe:
 
 ```TypeScript
-await client.subscribe( "#" );
+import { Artnet } from "https://raw.githubusercontent.com/xopr/deno_artnet/master/lib/module.ts";
 ```
 
-Vervolgens laten we de bibliotheek onze data decoderen (in de `on( "message"... )` callback):
-Owja, haal het liggend streepje bij `_topic` en de `decoder` weg.
-
+En onze client initialiseren (het IP adres kan gewijzigd zijn):
+```Typescript
+const artnet = new Artnet({host:"192.168.1.234", port: 6454, sendAll: true});
+const artnetData = new Array<number>(512).fill( 1 );
+```
+De eerste test:
 ```TypeScript
-const data = decodePayload( topic, payload );
-  if ( !data )
-    return;
+void artnet.set(artnetData, 1 );
 ```
-Merk op dat `decodePayload` niet herkend wordt; aanwijzen en check met "quick fix" (of met de cursor erop staan en **ctrl+.** ): **Add missing function declaration 'decodePayload'** VSCode weet het even niet, dus we voegen het handmatig toe bovenin de file:
-```TypeScript
-import { decodePayload } from "./SpaceApi.ts";
-```
-
-Nu doet `topic` een beetje raar: verander
-```TypeScript
-topic: string
-```
-in
-```TypeScript
-topic: keyof interfaces
-```
-En doe een quick fix op `interfaces`: **Update import from './SpaceApi.ts**
-
-
-Nu hebben we een generiek type (`TasmotaPayload`):
-Wijs maar over de `data.Switch1` en zie dat het type `SwitchState | undefined` is.
-
-Ook is er code completion: typ maar `data.` en zie de code completion zijn werk doen (kies bijvoorbeeld `ENERGY?` en zie dat het veranderd in `data?.ENERGY`).
-
-We gaan type guard magic toepassen:
-```TypeScript
-    if ( is( SpaceStateType, data ) )
-      console.log( `Space is ${data.Switch1 === "ON" ? "open" : "closed"}` );
-```
-Doe een quick fix op `is` en `SpaceStateType`.
-Wijs nu opnieuw `Switch1` aan en zie dat het enkel `SwitchState` is geworden: type guard actief!
-
-En nu voor de overige 2 types:
-* `TemperatureType` -> `["DS18B20-1"].Temperature` (het streepje maakt het speciaal)
-* `PowerType` -> `ENERGY.Power` en `Switch`
 
 Test je code met:
 ```bash
-deno run --allow-net main.ts
+deno run --allow-net --unstable main.ts
 ```
 
-Je bent nu een TypeScript expert!
+Vervang de `console.log` bij de spacestate check nu in
+```TypeScript
+    setSpaceLight( data.Switch1 === "ON" );
+```
 
-Commit de wijzigingen en ga naar stap 3:
+De functie kun je onderaan implementeren:
+```TypeScript
+function setSpaceLight( on: boolean)
+{
+  for ( let n = 0; n < artnetData.length; ++n )
+  {
+    // Select all red or green channels depending on boolean
+    artnetData[n] = (n - (on ? 1 : 0)) % 3 ? 1 : 100;
+  }
+
+  try
+  {
+      void artnet.set(artnetData, 1 );
+  }
+  catch {
+    // Pass
+  }
+}
+```
+Tada: een SpaceState indicator;
+Je bent nu een ART-net expert!
+
+Commit de wijzigingen en ga op zoek naar een andere uitdaging:
 ```bash
 git add *
-git commit -m "I CAN HAZ TYPESCRIPT"
-git switch part3
+git commit -m "lempke, wie esj"
+```
+
+P.S.
+```TypeScript
+  for ( let n = 0; n < artnetData.length; n+=3 )
+  {
+      const [r,g,b] = hslToRgb( range(n, 0, artnetData.length, 0, 100 ) | 0, 100, 50 );
+      artnetData[n] = r;
+      artnetData[n + 1] = g;
+      artnetData[n + 2] = b;
+  }
 ```
