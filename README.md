@@ -1,98 +1,60 @@
-Basisbenodigdheden
--------------
-* [git](https://git-scm.com/download/) source control
-* [Visual Studio Code](https://code.visualstudio.com/download) of [VSCodium](https://github.com/vscodium/vscodium/releases/latest) -> typisch ***amd64.deb** bestand.
+We gaan op alle topics subscriben!
 
-Alles-in-één commando's:
-```bash
-sudo apt install git codium curl -y
-curl -fsSL https://deno.land/x/install/install.sh|sh
-# Volg installatie-instructie:
-echo "export DENO_INSTALL=\"$HOME/.deno\"" >> $HOME/.bashrc
-echo "export PATH=\"\$DENO_INSTALL/bin:\$PATH\"" >> $HOME/.bashrc
-source ~/.bashrc (or logout)
-```
-(vervang `.bashrc` with `.zshrc` voor MacOS)
-
----
-
-Deno
-----
-* [Deno](https://deno.land/manual/getting_started/installation)
-* Start Visual Studio Code
-  * Open **Extensions** (ctrl+shift+X): en zoek op `Deno` (Identifier: **denoland.vscode-deno**, niet-Canary);
-  * klik **Install**
-  * Open *Source Control* (ctrl+shift+G);
-  * klik op (…) **Clone Repository** en voer in: `https://github.com/xopr/deno_spaceapi`;
-  * kies basisprojectmap en vervolgens **Open** en **Yes, I trust the authors**.
-  
----
-
-Hello World
------------
-* Open **View**, **Command Palette** (ctrl+shift+P) en typ `deno init`: lint, unstable (beide: ja)
-* Herlaad het IDE venster: (ctrl+shift+P), `reload window`
-* Open Terminal venster (ctrl+`) en typ de volgende commando's:
-```bash
-deno init # bij een lege map wordt dit door het eerste init commando verzorgd
-deno test
-deno run main.ts
-```
-* Open **main.ts** (ctrl+p) en vervang de code met:
 ```TypeScript
-import { Client } from "https://deno.land/x/mqtt/deno/mod.ts";
-
-const client = new Client( { username: "ackspace", password: "ackspace", url: "mqtt://192.168.1.42" } );
-await client.connect();
-await client.subscribe( "ackspace/hackspace/spacestate/tele/SENSOR" );
-
-console.log( "Spacestate checker initialized." );
-
-client.on( "message", ( topic, payload ) => {
-  console.log( topic, payload );
-} );
-```
-Draai dit.
-Draai het nogmaals met: `deno run --allow-net main.ts`
-
-Merk op dat de `payload` binair (`Uint8Array`) en de types `any` zijn.
-
-Vervang de callback met:
-```TypeScript 
-const decoder = new TextDecoder();
-client.on( "message", ( topic: string, payload: Uint8Array ) => {
-  const message = decoder.decode( payload );
-  console.log( topic, message );
-} );
+await client.subscribe( "#" );
 ```
 
-Het is JSON, dus parsen maar;
-```TypeSCript
-  const data = JSON.parse( message );
-  console.log( topic, data.Switch1 );
-```
+Vervolgens laten we de bibliotheek onze data decoderen (in de `on( "message"... )` callback):
+Owja, haal het liggend streepje bij `_topic` en de `decoder` weg.
 
-Merk op dat we geen code completion/"IntelliSense" hebben; ze zijn van type `any`, dus fixen we het en maken het fancy:
-```TypeSCript
-  const data = JSON.parse( message ) as { Switch1: "ON" | "OFF" };
-  console.log( `Space is ${data.Switch1 === "ON" ? "open" : "closed"}` );
-```
-Tenslotte fixen we de `topic`-warning door hem te hernoemen naar `_topic`.
-
-Als extra kan men het type op een nette manier implementeren:
 ```TypeScript
-type SpaceState = {
-  Switch1: "ON" | "OFF";
-}
-
-...
-
-  const data = JSON.parse( message ) as SpaceState;
+const data = decodePayload( topic, payload );
+  if ( !data )
+    return;
+```
+Merk op dat `decodePayload` niet herkend wordt; aanwijzen en check met "quick fix" (of met de cursor erop staan en **ctrl+.** ): **Add missing function declaration 'decodePayload'** VSCode weet het even niet, dus we voegen het handmatig toe bovenin de file:
+```TypeScript
+import { decodePayload } from "./SpaceApi.ts";
 ```
 
-Commit de wijzigingen en ga naar stap 2:
+Nu doet `topic` een beetje raar: verander
+```TypeScript
+topic: string
+```
+in
+```TypeScript
+topic: keyof interfaces
+```
+En doe een quick fix op `interfaces`: **Update import from './SpaceApi.ts**
+
+
+Nu hebben we een generiek type (`TasmotaPayload`):
+Wijs maar over de `data.Switch1` en zie dat het type `SwitchState | undefined` is.
+
+Ook is er code completion: typ maar `data.` en zie de code completion zijn werk doen (kies bijvoorbeeld `ENERGY?` en zie dat het veranderd in `data?.ENERGY`).
+
+We gaan type guard magic toepassen:
+```TypeScript
+    if ( is( SpaceStateType, data ) )
+      console.log( `Space is ${data.Switch1 === "ON" ? "open" : "closed"}` );
+```
+Doe een quick fix op `is` en `SpaceStateType`.
+Wijs nu opnieuw `Switch1` aan en zie dat het enkel `SwitchState` is geworden: type guard actief!
+
+En nu voor de overige 2 types:
+* `TemperatureType` -> `["DS18B20-1"].Temperature` (het streepje maakt het speciaal)
+* `PowerType` -> `ENERGY.Power` en `Switch`
+
+Test je code met:
+```bash
+deno run --allow-net main.ts
+```
+
+Je bent nu een TypeScript expert!
+
+Commit de wijzigingen en ga naar stap 3:
 ```bash
 git add *
-git commit -m "Hello SpaceAPI"
-git switch part2
+git commit -m "I CAN HAZ TYPESCRIPT"
+git switch part3
 ```
